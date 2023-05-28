@@ -1,0 +1,13 @@
+{
+    "commit_summarizer": {
+        "summarize_commit_details": "Summarize the following commit details:\n\n{}"
+    },
+    "changelog_writer": {
+        "tail_changelog_user": "Here is the tail of the existing CHANGELOG.md. Please use this as a guide on format and style.\n\n===\n\n{}",
+        "unknown_version_user": "I don't know the version number for this release. Based on the following commit summaries, can you guess a suitable version number based on SEMVER?",
+        "known_version_user": "The new version is {}. ",
+        "releasing_date_user": "It is releasing on today's date: {} (date format is ISO 8601 - YYYY-MM-DD)",
+        "commit_summaries_user": "I will now give you commit summaries for the commits between {} and {} from oldest to newest:{}",
+        "new_changelog_entry_user": "Please give me the new changelog entry for version the new version {}, given these commit messages, following the format of my current CHANGELOG.md. Give only the new entry, nothing else. Please put the most significant changes first."
+    }
+}

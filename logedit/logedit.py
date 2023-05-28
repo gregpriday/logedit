@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sys
@@ -14,14 +15,31 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 
+# Cache the output
+def load_messages(filename):
+    with open(filename, 'r') as file:
+        messages = json.load(file)
+    return messages
+
+
+message_text = load_messages(os.path.join(script_dir, "messages.json"))
+
+
 def summarize(text):
     system_message = open(os.path.join(script_dir, "./system/commit_summarizer.txt"), "r").read()
+
+    # TODO use tiktoken to limit to 2048 tokens
+    # Split text into lines and only take the first 50
+    text = "\n".join(text.split("\n")[:100])
+
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": message_text["commit_summarizer"]["summarize_commit_details"].format(text)}
+    ]
+    
     completion = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
-        messages=[
-            {"role": "system", "content": system_message},
-            {"role": "user", "content": f"Summarize the following commit details:\n\n{text}"}
-        ],
+        messages=messages,
         temperature=0.25
     )
     return completion.choices[0].message['content']
@@ -77,26 +95,41 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
     system_message = open(os.path.join(script_dir, "./system/changelog_writer.txt"), "r").read()
     messages = [
         {"role": "system", "content": system_message},
-        {"role": "user",
-         "content": "Here is the tail of the existing CHANGELOG.md. Please use this as a guide on format and style.\n\n===\n\n" + "".join(
-             last_lines)},
+        {
+            "role": "user",
+            "content": message_text["changelog_writer"]["tail_changelog_user"].format("".join(last_lines))
+        },
     ]
 
     if current_version == "HEAD":
-        messages.append({"role": "user",
-                         "content": "I don't know the version number for this release. Based on the following commit summaries, can you guess a suitable version number based on SEMVER?"})
+        messages.append({
+            "role": "user",
+            "content": message_text["changelog_writer"]["unknown_version_user"]
+        })
     else:
-        messages.append({"role": "user",
-                         "content": f"The new version is {current_version}."})
+        messages.append({
+            "role": "user",
+            "content": message_text["changelog_writer"]["known_version_user"].format(current_version)
+        })
 
-    messages.append({"role": "user", "content": f"it is releasing on today's date: {datetime.now().date().isoformat()} (date format is ISO 8601 - YYYY-MM-DD)"})
+    messages.append({
+        "role": "user",
+        "content": message_text["changelog_writer"]["releasing_date_user"].format(datetime.now().date().isoformat())
+    })
 
     messages.extend([
-        {"role": "user",
-         "content": f"I will now give you commit summaries for the commits between {previous_version} and {current_version} from oldest to newest:" + "\n\n---\n\n".join(
-             summaries)},
-        {"role": "user",
-         "content": f"Please give me the new changelog entry for version the new version {current_version}, given these commit messages, following the format of my current CHANGELOG.md. Give only the new entry, nothing else. Please put the most significant changes first."}
+        {
+            "role": "user",
+            "content": message_text["changelog_writer"]["commit_summaries_user"].format(
+                previous_version,
+                current_version,
+                "\n\n---\n\n".join(summaries)
+            )
+        },
+        {
+            "role": "user",
+            "content": message_text["changelog_writer"]["new_changelog_entry_user"].format(current_version)
+        },
     ])
 
     print(f"Summarized commits, generating changelog entry using {model}.")
