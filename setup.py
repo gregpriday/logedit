@@ -22,7 +22,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "logedit=logedit.logedit:main",
+            "logedit=logedit.logedit:entrypoint",
         ],
     },
 )
