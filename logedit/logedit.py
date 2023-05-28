@@ -121,8 +121,8 @@ def entrypoint():
     parser = argparse.ArgumentParser(description="Automatically generate a changelog entry from git commits.")
     parser.add_argument('--version', '-v', type=str, default="HEAD", help="Current version of the software.")
     parser.add_argument('--changelog', '-c', type=str, default="CHANGELOG.md", help="Path to the CHANGELOG.md file.")
-    parser.add_argument('-4', '--gpt4', '--gpt-4', action='store_true',
-                        help="Use GPT-4 model if specified, otherwise use GPT-3.5 Turbo.")
+    parser.add_argument('-3', '--gpt3', '--gpt-3', action='store_true',
+                        help="Use GPT-3.5 Turbo model if specified, otherwise use GPT-4.")
     parser.add_argument('--append', '-a', action='store_true',
                         help="Automatically append the new changelog to the original file.")
     args = parser.parse_args()
@@ -130,7 +130,7 @@ def entrypoint():
     if '--help' in sys.argv or '-h' in sys.argv:
         parser.print_help()
     else:
-        model = "gpt-4" if args.gpt4 else "gpt-3.5-turbo"
+        model = "gpt-3.5-turbo" if args.gpt3 else "gpt-4"
         main(args.version, args.changelog, model, args.append)
 
 
