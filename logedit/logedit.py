@@ -1,6 +1,8 @@
 import os
+import sys
+
 import openai
-from git import Repo
+from git import Repo, InvalidGitRepositoryError
 from tqdm import tqdm
 import argparse
 from datetime import datetime
@@ -27,9 +29,17 @@ def summarize(text):
     return completion.choices[0].message['content']
 
 
-def main(current_version, changelog_file, model="gpt-3.5-turbo"):
-    # initialize git repo
-    repo = Repo(os.getcwd())
+def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-3.5-turbo"):
+    if current_version is None or changelog_file is None:
+        print("Error: Missing required arguments: 'current_version' and 'changelog_file'")
+        print("Usage: logedit [current_version] [changelog_file]")
+        return
+
+    try:
+        repo = Repo(os.getcwd())
+    except InvalidGitRepositoryError:
+        print(f"The current directory ({os.getcwd()}) is not a valid Git repository. Please navigate to a Git repository and try again.")
+        sys.exit(1)
 
     if ':' in current_version:
         previous_version, current_version = current_version.split(':')
@@ -54,7 +64,9 @@ def main(current_version, changelog_file, model="gpt-3.5-turbo"):
         diff = repo.git.diff(commit.parents[0].hexsha, commit.hexsha)
         text = commit.message + "\n" + diff
         summary = summarize(text)
-        summaries.append(summary)
+        timestamp = commit.committed_datetime.isoformat()  # ISO 8601 format
+        formatted_commit_info = f"Commit: {commit.hexsha[:6]}\nTimestamp: {timestamp}\nMessage: {commit.message}\nSummary: {summary}"
+        summaries.append(formatted_commit_info)
 
     # read the tail of the current changelog file
     with open(changelog_file, 'r') as file:
@@ -65,7 +77,7 @@ def main(current_version, changelog_file, model="gpt-3.5-turbo"):
     messages = [
         {"role": "system", "content": system_message},
         {"role": "user", "content": "Here is the tail of the existing CHANGELOG.md. Please use this as a guide on format and style.\n\n===\n\n" + "".join(last_lines)},
-        {"role": "user", "content": f"The new version is {current_version} and today's date is {datetime.now().date().isoformat()} (date format is ISO 8601 - YYYY-MM-DD)"},
+        {"role": "user", "content": f"The new version is {current_version} it is releasing on today's date: {datetime.now().date().isoformat()} (date format is ISO 8601 - YYYY-MM-DD)"},
         {"role": "user", "content": f"I will now give you commit summaries for the commits between {previous_version} and {current_version} from oldest to newest:" + "\n\n---\n\n".join(summaries)},
         {"role": "user", "content": f"Please give me the new changelog entry for version the new version {current_version}, given these commit messages, following the format of my current CHANGELOG.md. Give only the new entry, nothing else. Please put the most significant changes first."}
     ]
