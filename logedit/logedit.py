@@ -22,7 +22,7 @@ def summarize(text):
             {"role": "system", "content": system_message},
             {"role": "user", "content": f"Summarize the following commit details:\n\n{text}"}
         ],
-        temperature=0.4
+        temperature=0.25
     )
     return completion.choices[0].message['content']
 
@@ -30,7 +30,6 @@ def summarize(text):
 def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", append=False):
     if current_version is None or changelog_file is None:
         print("Error: Missing required arguments: 'current_version' and 'changelog_file'")
-        print("Usage: logedit [current_version] [changelog_file]")
         return
 
     try:
@@ -81,20 +80,30 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
         {"role": "user",
          "content": "Here is the tail of the existing CHANGELOG.md. Please use this as a guide on format and style.\n\n===\n\n" + "".join(
              last_lines)},
-        {"role": "user",
-         "content": f"The new version is {current_version} it is releasing on today's date: {datetime.now().date().isoformat()} (date format is ISO 8601 - YYYY-MM-DD)"},
+    ]
+
+    if current_version == "HEAD":
+        messages.append({"role": "user",
+                         "content": "I don't know the version number for this release. Based on the following commit summaries, can you guess a suitable version number based on SEMVER?"})
+    else:
+        messages.append({"role": "user",
+                         "content": f"The new version is {current_version}."})
+
+    messages.append({"role": "user", "content": f"it is releasing on today's date: {datetime.now().date().isoformat()} (date format is ISO 8601 - YYYY-MM-DD)"})
+
+    messages.extend([
         {"role": "user",
          "content": f"I will now give you commit summaries for the commits between {previous_version} and {current_version} from oldest to newest:" + "\n\n---\n\n".join(
              summaries)},
         {"role": "user",
          "content": f"Please give me the new changelog entry for version the new version {current_version}, given these commit messages, following the format of my current CHANGELOG.md. Give only the new entry, nothing else. Please put the most significant changes first."}
-    ]
+    ])
 
     print(f"Summarized commits, generating changelog entry using {model}.")
     completion = openai.ChatCompletion.create(
         model=model,
         messages=messages,
-        temperature=0.4
+        temperature=0.1
     )
     new_changelog_entry = completion.choices[0].message['content']
 
