@@ -21,7 +21,8 @@ def summarize(text):
         messages=[
             {"role": "system", "content": system_message},
             {"role": "user", "content": f"Summarize the following commit details:\n\n{text}"}
-        ]
+        ],
+        temperature=0.4
     )
     return completion.choices[0].message['content']
 
@@ -55,7 +56,7 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
     print(f"Current version is: {current_version}")
 
     # get commits between recent version and current version
-    commits = list(repo.iter_commits(f'{previous_version}..{current_version}'))
+    commits = list(repo.iter_commits(f'{previous_version}..HEAD'))
 
     print(f"Total commits: {len(commits)}")
 
@@ -92,7 +93,8 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
     print(f"Summarized commits, generating changelog entry using {model}.")
     completion = openai.ChatCompletion.create(
         model=model,
-        messages=messages
+        messages=messages,
+        temperature=0.4
     )
     new_changelog_entry = completion.choices[0].message['content']
 
@@ -120,8 +122,7 @@ def entrypoint():
         parser.print_help()
     else:
         model = "gpt-4" if args.gpt4 else "gpt-3.5-turbo"
-        print(f"Using {model} model.")
-        main(args.version, args.changelog, model)
+        main(args.version, args.changelog, model, args.append)
 
 
 if __name__ == "__main__":
