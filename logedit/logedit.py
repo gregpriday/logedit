@@ -93,18 +93,23 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
     backoff_strategy = backoff.on_exception(backoff.expo, (Exception,), max_tries=3, base=2, factor=5)
 
     @backoff_strategy
-    def process_commit(commit):
-        diff = repo.git.diff(commit.parents[0].hexsha, commit.hexsha)
+    def process_commit(diff, commit):
         text = commit.message + "\n" + diff
         summary = summarize(text, model="gpt-3.5-turbo")
         timestamp = commit.committed_datetime.isoformat()  # ISO 8601 format
         formatted_commit_info = f"Commit: {commit.hexsha[:6]}\nTimestamp: {timestamp}\nMessage: {commit.message}\nSummary: {summary}"
         return formatted_commit_info
 
+    # get all commit diffs in a single thread
+    commit_diffs = []
+    for commit in commits:
+        diff = repo.git.diff(commit.parents[0].hexsha, commit.hexsha)
+        commit_diffs.append((diff, commit))
+
     # loop over all commits and get summaries in parallel
     summaries = []
     with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = {executor.submit(process_commit, commit) for commit in commits}
+        futures = {executor.submit(process_commit, diff, commit) for diff, commit in commit_diffs}
         for future in tqdm(concurrent.futures.as_completed(futures), desc="Summarizing commits", total=len(commits)):
             try:
                 summaries.append(future.result())
