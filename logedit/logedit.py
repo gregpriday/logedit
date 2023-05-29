@@ -16,6 +16,9 @@ import tiktoken
 
 # initialize openai api
 openai.api_key = os.getenv("OPENAI_API_KEY")
+if not openai.api_key:
+    raise ValueError("Please set the OPENAI_API_KEY environment variable. See: "
+                     "https://github.com/openai/openai-python#usage")
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
