@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 with open("README.md", "r") as readme_file:
     readme = readme_file.read()
 
-requirements = ["gitpython>=3.1.14", "tqdm>=4.60.0", "openai>=0.27.0", "backoff>=1.10.0"]
+requirements = ["gitpython>=3.1.14", "tqdm>=4.60.0", "openai>=0.27.0", "backoff>=1.10.0", "tiktoken>=0.4.0"]
 
 setup(
     name="logedit",

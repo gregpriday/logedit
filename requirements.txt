@@ -2,3 +2,4 @@ gitpython
 openai
 tqdm
 backoff
+tiktoken

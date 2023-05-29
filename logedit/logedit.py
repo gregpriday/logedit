@@ -11,6 +11,7 @@ import backoff
 import openai
 from git import Repo, InvalidGitRepositoryError
 from tqdm import tqdm
+import tiktoken
 
 
 # initialize openai api
@@ -30,11 +31,14 @@ message_text = load_messages(os.path.join(script_dir, "messages.json"))
 
 
 def summarize(text, model="gpt-3.5-turbo"):
-    system_message = open(os.path.join(script_dir, "./system/commit_summarizer.txt"), "r").read()
+    # Get encoding for gpt-3.5-turbo
+    encoding = tiktoken.encoding_for_model(model)
 
-    # TODO use tiktoken to limit to 2048 tokens
-    # Split text into lines and only take the first 50
-    text = "\n".join(text.split("\n")[:100])
+    # Limit the text to 2048 tokens.
+    # GPT-3.5 has a limit of 4096 tokens, but we need to leave room for the system message and response.
+    text = encoding.decode(encoding.encode(text)[:2048])
+
+    system_message = open(os.path.join(script_dir, "./system/commit_summarizer.txt"), "r").read()
 
     messages = [
         {"role": "system", "content": system_message},
