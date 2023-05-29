@@ -3,3 +3,4 @@ openai
 tqdm
 backoff
 tiktoken
+termcolor

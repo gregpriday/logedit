@@ -12,6 +12,7 @@ import openai
 from git import Repo, InvalidGitRepositoryError
 from tqdm import tqdm
 import tiktoken
+from termcolor import colored
 
 
 # initialize openai api
@@ -59,14 +60,13 @@ def summarize(text, model="gpt-3.5-turbo"):
 
 def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", append=False):
     if current_version is None or changelog_file is None:
-        print("Error: Missing required arguments: 'current_version' and 'changelog_file'")
+        print(colored("Error: Missing required arguments: 'current_version' and 'changelog_file'", 'red'))
         return
 
     try:
         repo = Repo(os.getcwd())
     except InvalidGitRepositoryError:
-        print(
-            f"The current directory ({os.getcwd()}) is not a valid Git repository. Please navigate to a Git repository and try again.")
+        print(colored(f"The current directory ({os.getcwd()}) is not a valid Git repository. Please navigate to a Git repository and try again.", 'red'))
         sys.exit(1)
 
     if ':' in current_version:
@@ -81,13 +81,13 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
         # find the most recent version
         previous_version = version_tags[-1] if version_tags else None
 
-    print(f"Previous version is: {previous_version}")
-    print(f"Current version is: {current_version}")
+    print(colored(f"Previous version is: {previous_version}", 'yellow'))
+    print(colored(f"Current version is: {current_version}", 'yellow'))
 
     # get commits between recent version and current version
     commits = list(repo.iter_commits(f'{previous_version}..HEAD'))
 
-    print(f"Total commits: {len(commits)}")
+    print(colored(f"Total commits: {len(commits)}", 'cyan'))
 
     # define the backoff strategy - 5, 10, 20 seconds
     backoff_strategy = backoff.on_exception(backoff.expo, (Exception,), max_tries=3, base=2, factor=5)
@@ -109,7 +109,7 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
             try:
                 summaries.append(future.result())
             except Exception as e:
-                print(f"An error occurred: {e}")
+                print(colored(f"An error occurred: {e}", 'red'))
 
     # read the tail of the current changelog file
     with open(changelog_file, 'r') as file:
@@ -158,7 +158,7 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
     ])
 
     # generate a new changelog entry using OpenAI's API
-    print(f"Summarized commits, generating changelog entry using {model}.")
+    print(colored(f"Summarized commits, generating changelog entry using {model}.", 'green'))
     completion = openai.ChatCompletion.create(
         model=model,
         messages=messages,
@@ -166,14 +166,15 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
     )
     new_changelog_entry = completion.choices[0].message['content']
 
-    print(f"\nNew Changelog Entry:\n{new_changelog_entry}")
+    print(colored(f"\nNew Changelog Entry:\n", 'blue'))
+    print(new_changelog_entry)
 
     # append new changelog entry to the file if --append is specified
     if append:
         with open(changelog_file, 'a') as file:
             # Ensure there's a double linebreak before the new content
             file.write('\n\n' + new_changelog_entry)
-        print(f"New changelog entry has been appended to {changelog_file}.")
+        print(colored(f"New changelog entry has been appended to {changelog_file}.", 'magenta'))
 
 
 def entrypoint():
