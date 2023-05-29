@@ -196,6 +196,15 @@ def entrypoint():
         parser.print_help()
     else:
         model = "gpt-3.5-turbo" if args.gpt3 else "gpt-4"
+
+        # If we want to use GPT-4, we need to check that it's available for this user, otherwise show a warning
+        if model == "gpt-4":
+            try:
+                openai.Model.retrieve(model)
+            except Exception as e:
+                print(colored(f"GPT-4 model is not available for this user. It is recommended. Please check your access permissions. Defaulting to GPT-3.5 Turbo. Error: {e}",'yellow'))
+                model = "gpt-3.5-turbo"
+
         main(args.version, args.changelog, model, args.append)
 
 
