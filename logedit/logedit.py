@@ -1,13 +1,17 @@
+import argparse
+import concurrent.futures
 import json
 import os
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 
+import backoff
 import openai
 from git import Repo, InvalidGitRepositoryError
 from tqdm import tqdm
-import argparse
-from datetime import datetime
+
 
 # initialize openai api
 openai.api_key = os.getenv("OPENAI_API_KEY")
@@ -25,7 +29,7 @@ def load_messages(filename):
 message_text = load_messages(os.path.join(script_dir, "messages.json"))
 
 
-def summarize(text):
+def summarize(text, model="gpt-3.5-turbo"):
     system_message = open(os.path.join(script_dir, "./system/commit_summarizer.txt"), "r").read()
 
     # TODO use tiktoken to limit to 2048 tokens
@@ -36,9 +40,9 @@ def summarize(text):
         {"role": "system", "content": system_message},
         {"role": "user", "content": message_text["commit_summarizer"]["summarize_commit_details"].format(text)}
     ]
-    
+
     completion = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+        model=model,
         messages=messages,
         temperature=0.25
     )
@@ -77,15 +81,27 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
 
     print(f"Total commits: {len(commits)}")
 
-    # loop over all commits and get summaries
-    summaries = []
-    for commit in tqdm(commits, desc="Summarizing commits"):
+    # define the backoff strategy - 5, 10, 20 seconds
+    backoff_strategy = backoff.on_exception(backoff.expo, (Exception,), max_tries=3, base=2, factor=5)
+
+    @backoff_strategy
+    def process_commit(commit):
         diff = repo.git.diff(commit.parents[0].hexsha, commit.hexsha)
         text = commit.message + "\n" + diff
-        summary = summarize(text)
+        summary = summarize(text, model="gpt-3.5-turbo")
         timestamp = commit.committed_datetime.isoformat()  # ISO 8601 format
         formatted_commit_info = f"Commit: {commit.hexsha[:6]}\nTimestamp: {timestamp}\nMessage: {commit.message}\nSummary: {summary}"
-        summaries.append(formatted_commit_info)
+        return formatted_commit_info
+
+    # loop over all commits and get summaries in parallel
+    summaries = []
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = {executor.submit(process_commit, commit) for commit in commits}
+        for future in tqdm(concurrent.futures.as_completed(futures), desc="Summarizing commits", total=len(commits)):
+            try:
+                summaries.append(future.result())
+            except Exception as e:
+                print(f"An error occurred: {e}")
 
     # read the tail of the current changelog file
     with open(changelog_file, 'r') as file:
