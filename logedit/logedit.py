@@ -41,7 +41,8 @@ def summarize(text, model="gpt-3.5-turbo"):
     # GPT-3.5 has a limit of 4096 tokens, but we need to leave room for the system message and response.
     text = encoding.decode(encoding.encode(text)[:2048])
 
-    system_message = open(os.path.join(script_dir, "./system/commit_summarizer.txt"), "r").read()
+    with open(os.path.join(script_dir, "./system/commit_summarizer.txt"), "r") as file:
+        system_message = file.read()
 
     messages = [
         {"role": "system", "content": system_message},
@@ -114,8 +115,9 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
     with open(changelog_file, 'r') as file:
         last_lines = file.readlines()[-40:]
 
-    # generate a new changelog entry using OpenAI
-    system_message = open(os.path.join(script_dir, "./system/changelog_writer.txt"), "r").read()
+    with open(os.path.join(script_dir, "./system/changelog_writer.txt"), "r") as file:
+        system_message = file.read()
+
     messages = [
         {"role": "system", "content": system_message},
         {
@@ -155,6 +157,7 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
         },
     ])
 
+    # generate a new changelog entry using OpenAI's API
     print(f"Summarized commits, generating changelog entry using {model}.")
     completion = openai.ChatCompletion.create(
         model=model,
