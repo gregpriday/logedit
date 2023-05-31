@@ -1,0 +1,2 @@
+include logedit/*.json
+include logedit/system/*.txt
