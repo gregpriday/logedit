@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.1.1] - 2023-05-31
+
+### Added
+- Added check for GPT-4 availability, falling back to GPT-3.5-turbo if not available.
+- Improved terminal styling with the `termcolor` package for better readability.
+
+### Changed
+- Fixed issues with fetching diff messages using threads by fetching them in series before spawning threads for summaries.
+- Reversed the order of entries in the CHANGELOG.md file for better organization.
+
+### Fixed
+- Implemented fixes for uploading to pipy.org, including updates to .gitignore, MANIFEST.in, and setup.py files.
+
 ## [0.1.0] - 2023-05-29
 
 ### Added
