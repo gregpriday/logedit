@@ -7,7 +7,7 @@ requirements = ["gitpython>=3.1.14", "tqdm>=4.60.0", "openai>=0.27.0", "backoff>
 
 setup(
     name="logedit",
-    version="0.1.0",
+    version="0.1.1",
     author="Greg Priday",
     author_email="greg@siteorigin.com",
     description="A package to auto-generate changelogs from git commits using OpenAI's APIs",
