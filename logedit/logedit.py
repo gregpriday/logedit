@@ -18,8 +18,10 @@ from termcolor import colored
 # initialize openai api
 openai.api_key = os.getenv("OPENAI_API_KEY")
 if not openai.api_key:
-    raise ValueError("Please set the OPENAI_API_KEY environment variable. See: "
-                     "https://github.com/openai/openai-python#usage")
+    print("OPENAI_API_KEY environment variable not found. Please enter it below:")
+    openai.api_key = input()
+    if not openai.api_key:
+        raise ValueError("No API Key provided. Terminating.")
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
