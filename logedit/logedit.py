@@ -60,7 +60,7 @@ def summarize(text, model="gpt-3.5-turbo"):
     return completion.choices[0].message['content']
 
 
-def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", append=False):
+def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", append=False, branches=None):
     if current_version is None or changelog_file is None:
         print(colored("Error: Missing required arguments: 'current_version' and 'changelog_file'", 'red'))
         return
@@ -71,7 +71,11 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
         print(colored(f"The current directory ({os.getcwd()}) is not a valid Git repository. Please navigate to a Git repository and try again.", 'red'))
         sys.exit(1)
 
-    if ':' in current_version:
+    if branches:
+        branch1, branch2 = branches.split(':')
+        previous_version = branch1
+        current_version = branch2
+    elif ':' in current_version:
         previous_version, current_version = current_version.split(':')
     else:
         # get all tags in repo
@@ -207,7 +211,7 @@ def entrypoint():
                 print(colored(f"GPT-4 model is not available for this user. It is recommended. Please check your access permissions. Defaulting to GPT-3.5 Turbo. Error: {e}",'yellow'))
                 model = "gpt-3.5-turbo"
 
-        main(args.version, args.changelog, model, args.append)
+        main(args.version, args.changelog, model, args.append, args.branches)
 
 
 if __name__ == "__main__":
