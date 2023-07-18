@@ -15,6 +15,11 @@ import tiktoken
 from termcolor import colored
 
 
+def count_tokens(text, model):
+    tokens = tiktoken.encoding_for_model(model).encode(text)
+    return len(tokens)
+
+
 # initialize openai api
 openai.api_key = os.getenv("OPENAI_API_KEY")
 if not openai.api_key:
@@ -60,22 +65,8 @@ def summarize(text, model="gpt-3.5-turbo"):
     return completion.choices[0].message['content']
 
 
-def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", append=False, branches=None):
-    if current_version is None or changelog_file is None:
-        print(colored("Error: Missing required arguments: 'current_version' and 'changelog_file'", 'red'))
-        return
-
-    try:
-        repo = Repo(os.getcwd())
-    except InvalidGitRepositoryError:
-        print(colored(f"The current directory ({os.getcwd()}) is not a valid Git repository. Please navigate to a Git repository and try again.", 'red'))
-        sys.exit(1)
-
-    if branches:
-        branch1, branch2 = branches.split(':')
-        previous_version = branch1
-        current_version = branch2
-    elif ':' in current_version:
+def get_version_tags(repo, current_version):
+    if ':' in current_version:
         previous_version, current_version = current_version.split(':')
     else:
         # get all tags in repo
@@ -87,21 +78,25 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
         # find the most recent version
         previous_version = version_tags[-1] if version_tags else None
 
-    print(colored(f"Previous version is: {previous_version}", 'yellow'))
-    print(colored(f"Current version is: {current_version}", 'yellow'))
+    return previous_version, current_version
 
+
+def get_commits(repo, previous_version):
     # get commits between recent version and current version
     commits = list(repo.iter_commits(f'{previous_version}..HEAD'))
 
     print(colored(f"Total commits: {len(commits)}", 'cyan'))
 
-    # define the backoff strategy - 5, 10, 20 seconds
+    return commits
+
+
+def summarize_commits(commits, repo, model):
     backoff_strategy = backoff.on_exception(backoff.expo, (Exception,), max_tries=3, base=2, factor=5)
 
     @backoff_strategy
     def process_commit(diff, commit):
         text = commit.message + "\n" + diff
-        summary = summarize(text, model="gpt-3.5-turbo")
+        summary = summarize(text, model=model)
         timestamp = commit.committed_datetime.isoformat()  # ISO 8601 format
         formatted_commit_info = f"Commit: {commit.hexsha[:6]}\nTimestamp: {timestamp}\nMessage: {commit.message}\nSummary: {summary}"
         return formatted_commit_info
@@ -122,10 +117,17 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
             except Exception as e:
                 print(colored(f"An error occurred: {e}", 'red'))
 
-    # read the tail of the current changelog file
+    return summaries
+
+
+def get_changelog_tail(changelog_file):
     with open(changelog_file, 'r') as file:
         last_lines = file.readlines()[-40:]
 
+    return last_lines
+
+
+def generate_new_changelog_entry(last_lines, summaries, previous_version, current_version, model):
     with open(os.path.join(script_dir, "./system/changelog_writer.txt"), "r") as file:
         system_message = file.read()
 
@@ -177,6 +179,10 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
     )
     new_changelog_entry = completion.choices[0].message['content']
 
+    return new_changelog_entry
+
+
+def append_changelog(new_changelog_entry, changelog_file, append):
     print(colored(f"\nNew Changelog Entry:\n", 'blue'))
     print(new_changelog_entry)
 
@@ -186,6 +192,40 @@ def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", a
             # Ensure there's a double linebreak before the new content
             file.write('\n\n' + new_changelog_entry)
         print(colored(f"New changelog entry has been appended to {changelog_file}.", 'magenta'))
+
+
+def main(current_version="HEAD", changelog_file="CHANGELOG.md", model="gpt-4", append=False, branches=None):
+    if current_version is None or changelog_file is None:
+        print(colored("Error: Missing required arguments: 'current_version' and 'changelog_file'", 'red'))
+        return
+
+    try:
+        repo = Repo(os.getcwd())
+    except InvalidGitRepositoryError:
+        print(colored(
+            f"The current directory ({os.getcwd()}) is not a valid Git repository. Please navigate to a Git repository and try again.",
+            'red'))
+        sys.exit(1)
+
+    if branches:
+        branch1, branch2 = branches.split(':')
+        previous_version = branch1
+        current_version = branch2
+    else:
+        previous_version, current_version = get_version_tags(repo, current_version)
+
+    print(colored(f"Previous version is: {previous_version}", 'yellow'))
+    print(colored(f"Current version is: {current_version}", 'yellow'))
+
+    commits = get_commits(repo, previous_version)
+
+    summaries = summarize_commits(commits, repo, model)
+
+    last_lines = get_changelog_tail(changelog_file)
+
+    new_changelog_entry = generate_new_changelog_entry(last_lines, summaries, previous_version, current_version, model)
+
+    append_changelog(new_changelog_entry, changelog_file, append)
 
 
 def entrypoint():
@@ -208,7 +248,9 @@ def entrypoint():
             try:
                 openai.Model.retrieve(model)
             except Exception as e:
-                print(colored(f"GPT-4 model is not available for this user. It is recommended. Please check your access permissions. Defaulting to GPT-3.5 Turbo. Error: {e}",'yellow'))
+                print(colored(
+                    f"GPT-4 model is not available for this user. It is recommended. Please check your access permissions. Defaulting to GPT-3.5 Turbo. Error: {e}",
+                    'yellow'))
                 model = "gpt-3.5-turbo"
 
         main(args.version, args.changelog, model, args.append, args.branches)
