@@ -8,6 +8,7 @@
         "known_version_user": "The new version is {}. ",
         "releasing_date_user": "It is releasing on today's date: {} (date format is ISO 8601 - YYYY-MM-DD)",
         "commit_summaries_user": "I will now give you commit summaries for the commits between {} and {} from oldest to newest:{}",
-        "new_changelog_entry_user": "Please give me the new changelog entry for version the new version {}, given these commit messages, following the format of my current CHANGELOG.md. Give only the new entry, nothing else. Please put the most significant changes first."
+        "new_changelog_entry_user": "Please give me the new changelog entry for version the new version {}, given these commit messages, following the format of my current CHANGELOG.md. Give only the new entry, nothing else. Please put the most significant changes first.",
+        "combine_changelogs": "Please combine these changelogs for the same update into a single changelog entry:\n\n{}"
     }
 }

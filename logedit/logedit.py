@@ -109,6 +109,7 @@ def summarize_commits(commits, repo, model):
 
     # loop over all commits and get summaries in parallel
     summaries = []
+
     with ThreadPoolExecutor(max_workers=3) as executor:
         futures = {executor.submit(process_commit, diff, commit) for diff, commit in commit_diffs}
         for future in tqdm(concurrent.futures.as_completed(futures), desc="Summarizing commits", total=len(commits)):
@@ -131,55 +132,97 @@ def generate_new_changelog_entry(last_lines, summaries, previous_version, curren
     with open(os.path.join(script_dir, "./system/changelog_writer.txt"), "r") as file:
         system_message = file.read()
 
-    messages = [
-        {"role": "system", "content": system_message},
-        {
-            "role": "user",
-            "content": message_text["changelog_writer"]["tail_changelog_user"].format("".join(last_lines))
-        },
-    ]
+    def generate_single_changelog_entry(chunked_summaries):
+        messages = [
+            {"role": "system", "content": system_message},
+            {
+                "role": "user",
+                "content": message_text["changelog_writer"]["tail_changelog_user"].format("".join(last_lines))
+            },
+        ]
 
-    if current_version == "HEAD":
+        if current_version == "HEAD":
+            messages.append({
+                "role": "user",
+                "content": message_text["changelog_writer"]["unknown_version_user"]
+            })
+        else:
+            messages.append({
+                "role": "user",
+                "content": message_text["changelog_writer"]["known_version_user"].format(current_version)
+            })
+
         messages.append({
             "role": "user",
-            "content": message_text["changelog_writer"]["unknown_version_user"]
-        })
-    else:
-        messages.append({
-            "role": "user",
-            "content": message_text["changelog_writer"]["known_version_user"].format(current_version)
+            "content": message_text["changelog_writer"]["releasing_date_user"].format(datetime.now().date().isoformat())
         })
 
-    messages.append({
-        "role": "user",
-        "content": message_text["changelog_writer"]["releasing_date_user"].format(datetime.now().date().isoformat())
-    })
+        messages.extend([
+            {
+                "role": "user",
+                "content": message_text["changelog_writer"]["commit_summaries_user"].format(
+                    previous_version,
+                    current_version,
+                    "\n\n---\n\n".join(chunked_summaries)
+                )
+            },
+            {
+                "role": "user",
+                "content": message_text["changelog_writer"]["new_changelog_entry_user"].format(current_version)
+            },
+        ])
 
-    messages.extend([
-        {
-            "role": "user",
-            "content": message_text["changelog_writer"]["commit_summaries_user"].format(
-                previous_version,
-                current_version,
-                "\n\n---\n\n".join(summaries)
-            )
-        },
-        {
-            "role": "user",
-            "content": message_text["changelog_writer"]["new_changelog_entry_user"].format(current_version)
-        },
-    ])
+        # generate a new changelog entry using OpenAI's API
+        print(colored(f"Summarized commits, generating changelog entry using {model}.", 'green'))
+        completion = openai.ChatCompletion.create(
+            model=model,
+            messages=messages,
+            temperature=0.1
+        )
 
-    # generate a new changelog entry using OpenAI's API
-    print(colored(f"Summarized commits, generating changelog entry using {model}.", 'green'))
-    completion = openai.ChatCompletion.create(
-        model=model,
-        messages=messages,
-        temperature=0.1
-    )
-    new_changelog_entry = completion.choices[0].message['content']
+        # Display the entry to the user in a different color
+        print(colored(f"Generated changelog entry:\n{completion.choices[0].message['content']}", 'yellow'))
 
-    return new_changelog_entry
+        return completion.choices[0].message['content']
+
+    def chunk_summaries(summaries):
+        chunks = []
+        chunk = []
+        tokens = 0
+        for summary in summaries:
+            tokens_summary = count_tokens(summary, model)
+            if tokens + tokens_summary > 4096:
+                chunks.append(chunk)
+                chunk = []
+                tokens = 0
+            chunk.append(summary)
+            tokens += tokens_summary
+        if chunk:
+            chunks.append(chunk)
+        return chunks
+
+    chunks = chunk_summaries(summaries)
+    chunked_changelogs = [generate_single_changelog_entry(chunk) for chunk in chunks]
+
+    # combine all the changelogs entries into a single changelog entry
+    if len(chunked_changelogs) > 1:
+        with open(os.path.join(script_dir, "./system/changelog_combiner.txt"), "r") as file:
+            system_message = file.read()
+
+        print(colored(f"Combining chunked commits using {model}.", 'green'))
+        messages = [
+            {"role": "system", "content": system_message},
+            {"role": "user", "content": message_text["changelog_writer"]["combine_changelogs"].format(
+                "\n\n".join(chunked_changelogs))},
+        ]
+        completion = openai.ChatCompletion.create(
+            model=model,
+            messages=messages,
+            temperature=0.1
+        )
+        return completion.choices[0].message['content']
+
+    return chunked_changelogs[0]
 
 
 def append_changelog(new_changelog_entry, changelog_file, append):
@@ -236,6 +279,8 @@ def entrypoint():
                         help="Use GPT-3.5 Turbo model if specified, otherwise use GPT-4.")
     parser.add_argument('--append', '-a', action='store_true',
                         help="Automatically append the new changelog to the original file.")
+    parser.add_argument('--branches', '-b', type=str,
+                        help="Optional argument to specify two branches. Input should be in the format 'branch1:branch2'. If not provided, the script will use version tags to determine the range of commits.")
     args = parser.parse_args()
 
     if '--help' in sys.argv or '-h' in sys.argv:
